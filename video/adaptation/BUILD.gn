@@ -10,6 +10,10 @@ import("../../webrtc.gni")
 
 rtc_library("video_adaptation") {
   sources = [
+    "balanced_constraint.cc",
+    "balanced_constraint.h",
+    "bitrate_constraint.cc",
+    "bitrate_constraint.h",
     "encode_usage_resource.cc",
     "encode_usage_resource.h",
     "overuse_frame_detector.cc",
@@ -38,7 +42,6 @@ rtc_library("video_adaptation") {
     "../../modules/video_coding:video_coding_utility",
     "../../rtc_base:checks",
     "../../rtc_base:logging",
-    "../../rtc_base:macromagic",
     "../../rtc_base:rtc_base_approved",
     "../../rtc_base:rtc_event",
     "../../rtc_base:rtc_numerics",
@@ -77,7 +80,7 @@ if (rtc_include_tests) {
       "../../api/task_queue:task_queue",
       "../../api/video:encoded_image",
       "../../api/video:video_adaptation",
-      "../../api/video:video_frame_i420",
+      "../../api/video:video_frame",
       "../../api/video_codecs:video_codecs_api",
       "../../call/adaptation:resource_adaptation",
       "../../call/adaptation:resource_adaptation_test_utilities",

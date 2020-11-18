@@ -89,11 +89,11 @@ class ResourceAdaptationProcessorTest : public ::testing::Test {
         resource_(FakeResource::Create("FakeResource")),
         other_resource_(FakeResource::Create("OtherFakeResource")),
         video_stream_adapter_(
-            std::make_unique<VideoStreamAdapter>(&input_state_provider_)),
+            std::make_unique<VideoStreamAdapter>(&input_state_provider_,
+                                                 &frame_rate_provider_)),
         processor_(std::make_unique<ResourceAdaptationProcessor>(
-            /*encoder_stats_observer=*/&frame_rate_provider_,
             video_stream_adapter_.get())) {
-    processor_->SetResourceAdaptationQueue(TaskQueueBase::Current());
+    processor_->SetTaskQueue(TaskQueueBase::Current());
     video_stream_adapter_->AddRestrictionsListener(&restrictions_listener_);
     processor_->AddResource(resource_);
     processor_->AddResource(other_resource_);
@@ -707,6 +707,31 @@ TEST_F(ResourceAdaptationProcessorTest,
 
   // Delete |resource_| for cleanup.
   resource_ = nullptr;
+}
+
+TEST_F(ResourceAdaptationProcessorTest,
+       ResourceOverusedAtLimitReachedWillShareMostLimited) {
+  video_stream_adapter_->SetDegradationPreference(
+      DegradationPreference::MAINTAIN_FRAMERATE);
+  SetInputStates(true, kDefaultFrameRate, kDefaultFrameSize);
+
+  bool has_reached_min_pixels = false;
+  ON_CALL(frame_rate_provider_, OnMinPixelLimitReached())
+      .WillByDefault(testing::Assign(&has_reached_min_pixels, true));
+
+  // Adapt 10 times, which should make us hit the limit.
+  for (int i = 0; i < 10; ++i) {
+    resource_->SetUsageState(ResourceUsageState::kOveruse);
+    RestrictSource(restrictions_listener_.restrictions());
+  }
+  EXPECT_TRUE(has_reached_min_pixels);
+  auto last_update_count = restrictions_listener_.restrictions_updated_count();
+  other_resource_->SetUsageState(ResourceUsageState::kOveruse);
+  // Now both |resource_| and |other_resource_| are most limited. Underuse of
+  // |resource_| will not adapt up.
+  resource_->SetUsageState(ResourceUsageState::kUnderuse);
+  EXPECT_EQ(last_update_count,
+            restrictions_listener_.restrictions_updated_count());
 }
 
 }  // namespace webrtc

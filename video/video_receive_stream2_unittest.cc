@@ -170,7 +170,7 @@ TEST_F(VideoReceiveStream2Test, CreateFrameFromH264FmtpSpropAndIdr) {
 }
 
 TEST_F(VideoReceiveStream2Test, PlayoutDelay) {
-  const PlayoutDelay kPlayoutDelayMs = {123, 321};
+  const VideoPlayoutDelay kPlayoutDelayMs = {123, 321};
   std::unique_ptr<FrameObjectFake> test_frame(new FrameObjectFake());
   test_frame->id.picture_id = 0;
   test_frame->SetPlayoutDelay(kPlayoutDelayMs);
@@ -200,7 +200,7 @@ TEST_F(VideoReceiveStream2Test, PlayoutDelay) {
 
 TEST_F(VideoReceiveStream2Test, PlayoutDelayPreservesDefaultMaxValue) {
   const int default_max_playout_latency = timing_->max_playout_delay();
-  const PlayoutDelay kPlayoutDelayMs = {123, -1};
+  const VideoPlayoutDelay kPlayoutDelayMs = {123, -1};
 
   std::unique_ptr<FrameObjectFake> test_frame(new FrameObjectFake());
   test_frame->id.picture_id = 0;
@@ -216,7 +216,7 @@ TEST_F(VideoReceiveStream2Test, PlayoutDelayPreservesDefaultMaxValue) {
 
 TEST_F(VideoReceiveStream2Test, PlayoutDelayPreservesDefaultMinValue) {
   const int default_min_playout_latency = timing_->min_playout_delay();
-  const PlayoutDelay kPlayoutDelayMs = {-1, 321};
+  const VideoPlayoutDelay kPlayoutDelayMs = {-1, 321};
 
   std::unique_ptr<FrameObjectFake> test_frame(new FrameObjectFake());
   test_frame->id.picture_id = 0;
@@ -228,6 +228,40 @@ TEST_F(VideoReceiveStream2Test, PlayoutDelayPreservesDefaultMinValue) {
   EXPECT_NE(kPlayoutDelayMs.min_ms, timing_->min_playout_delay());
   EXPECT_EQ(kPlayoutDelayMs.max_ms, timing_->max_playout_delay());
   EXPECT_EQ(default_min_playout_latency, timing_->min_playout_delay());
+}
+
+TEST_F(VideoReceiveStream2Test, MaxCompositionDelayNotSetByDefault) {
+  // Default with no playout delay set.
+  std::unique_ptr<FrameObjectFake> test_frame0(new FrameObjectFake());
+  test_frame0->id.picture_id = 0;
+  video_receive_stream_->OnCompleteFrame(std::move(test_frame0));
+  EXPECT_FALSE(timing_->MaxCompositionDelayInFrames());
+
+  // Max composition delay not set for playout delay 0,0.
+  std::unique_ptr<FrameObjectFake> test_frame1(new FrameObjectFake());
+  test_frame1->id.picture_id = 1;
+  test_frame1->SetPlayoutDelay({0, 0});
+  video_receive_stream_->OnCompleteFrame(std::move(test_frame1));
+  EXPECT_FALSE(timing_->MaxCompositionDelayInFrames());
+
+  // Max composition delay not set for playout delay X,Y, where X,Y>0.
+  std::unique_ptr<FrameObjectFake> test_frame2(new FrameObjectFake());
+  test_frame2->id.picture_id = 2;
+  test_frame2->SetPlayoutDelay({10, 30});
+  video_receive_stream_->OnCompleteFrame(std::move(test_frame2));
+  EXPECT_FALSE(timing_->MaxCompositionDelayInFrames());
+}
+
+TEST_F(VideoReceiveStream2Test, MaxCompositionDelaySetFromMaxPlayoutDelay) {
+  // Max composition delay set if playout delay X,Y, where X=0,Y>0.
+  const VideoPlayoutDelay kPlayoutDelayMs = {0, 50};
+  const int kExpectedMaxCompositionDelayInFrames = 3;  // ~50 ms at 60 fps.
+  std::unique_ptr<FrameObjectFake> test_frame(new FrameObjectFake());
+  test_frame->id.picture_id = 0;
+  test_frame->SetPlayoutDelay(kPlayoutDelayMs);
+  video_receive_stream_->OnCompleteFrame(std::move(test_frame));
+  EXPECT_EQ(kExpectedMaxCompositionDelayInFrames,
+            timing_->MaxCompositionDelayInFrames());
 }
 
 class VideoReceiveStream2TestWithFakeDecoder : public ::testing::Test {

@@ -58,6 +58,7 @@ if (!build_with_chromium) {
       "../../../api/rtc_event_log",
       "../../../api/task_queue",
       "../../../api/transport:network_control",
+      "../../../api/transport:webrtc_key_value_config",
       "../../../api/video_codecs:video_codecs_api",
       "../../../rtc_base",
     ]
@@ -123,10 +124,7 @@ if (!build_with_chromium) {
       "analyzer/video/simulcast_dummy_buffer_helper.cc",
       "analyzer/video/simulcast_dummy_buffer_helper.h",
     ]
-    deps = [
-      "../../../api/video:video_frame",
-      "../../../api/video:video_frame_i420",
-    ]
+    deps = [ "../../../api/video:video_frame" ]
   }
 
   rtc_library("quality_analyzing_video_decoder") {
@@ -143,7 +141,6 @@ if (!build_with_chromium) {
       "../../../api:video_quality_analyzer_api",
       "../../../api/video:encoded_image",
       "../../../api/video:video_frame",
-      "../../../api/video:video_frame_i420",
       "../../../api/video:video_rtp_headers",
       "../../../api/video_codecs:video_codecs_api",
       "../../../modules/video_coding:video_codec_interface",
@@ -269,6 +266,7 @@ if (!build_with_chromium) {
         "../../../api:time_controller",
         "../../../api/rtc_event_log:rtc_event_log_factory",
         "../../../api/task_queue:default_task_queue_factory",
+        "../../../api/transport:field_trial_based_config",
         "../../../api/video_codecs:builtin_video_decoder_factory",
         "../../../api/video_codecs:builtin_video_encoder_factory",
         "../../../media:rtc_audio_video",
@@ -305,6 +303,7 @@ if (!build_with_chromium) {
         "../../../api:peer_connection_quality_test_fixture_api",
         "../../../api/video:video_frame",
         "../../../pc:peerconnection",
+        "../../../pc:video_track_source",
       ]
       absl_deps = [ "//third_party/abseil-cpp/absl/types:variant" ]
     }
@@ -395,7 +394,6 @@ if (!build_with_chromium) {
         "../../../api:video_quality_analyzer_api",
         "../../../api/rtc_event_log",
         "../../../api/task_queue",
-        "../../../api/task_queue:default_task_queue_factory",
         "../../../api/units:time_delta",
         "../../../api/units:timestamp",
         "../../../pc:pc_test_utils",
@@ -520,7 +518,6 @@ if (!build_with_chromium) {
         "../../../api:rtp_packet_info",
         "../../../api/video:encoded_image",
         "../../../api/video:video_frame",
-        "../../../api/video:video_frame_i420",
         "../../../common_video",
         "../../../modules/rtp_rtcp:rtp_rtcp_format",
         "../../../rtc_base:stringutils",
@@ -568,6 +565,7 @@ if (!build_with_chromium) {
       "../../../api:rtc_stats_api",
       "../../../api:stats_observer_interface",
       "../../../api:track_id_stream_info_map",
+      "../../../api/numerics",
       "../../../api/units:time_delta",
       "../../../api/units:timestamp",
       "../../../rtc_base:criticalsection",
@@ -611,6 +609,7 @@ if (!build_with_chromium) {
       "../../../api:peer_connection_quality_test_fixture_api",
       "../../../api:rtc_stats_api",
       "../../../api:track_id_stream_info_map",
+      "../../../api/numerics",
       "../../../api/units:data_rate",
       "../../../api/units:data_size",
       "../../../api/units:time_delta",
@@ -636,11 +635,11 @@ if (!build_with_chromium) {
       "../..:perf_test",
       "../../../api:array_view",
       "../../../api:video_quality_analyzer_api",
+      "../../../api/numerics",
       "../../../api/units:time_delta",
       "../../../api/units:timestamp",
       "../../../api/video:encoded_image",
       "../../../api/video:video_frame",
-      "../../../api/video:video_frame_i420",
       "../../../api/video:video_rtp_headers",
       "../../../common_video",
       "../../../rtc_base:criticalsection",
@@ -692,6 +691,7 @@ if (!build_with_chromium) {
       "../../../api:peer_connection_quality_test_fixture_api",
       "../../../api:rtc_stats_api",
       "../../../api:scoped_refptr",
+      "../../../api/numerics",
       "../../../api/test/network_emulation",
       "../../../api/units:data_rate",
       "../../../api/units:data_size",
@@ -718,6 +718,7 @@ if (!build_with_chromium) {
       "../../../api:peer_connection_quality_test_fixture_api",
       "../../../api:rtc_stats_api",
       "../../../api:track_id_stream_info_map",
+      "../../../api/numerics",
       "../../../api/units:timestamp",
       "../../../rtc_base:criticalsection",
       "../../../rtc_base:rtc_event",

@@ -24,7 +24,6 @@
 #include "api/video/video_frame.h"
 #include "api/video_codecs/video_codec.h"
 #include "api/video_codecs/video_encoder.h"
-#include "modules/include/module_common_types.h"
 #include "modules/video_coding/include/video_codec_interface.h"
 #include "rtc_base/synchronization/mutex.h"
 #include "rtc_base/synchronization/sequence_checker.h"
@@ -80,15 +79,15 @@ class FakeEncoder : public VideoEncoder {
                       bool keyframe,
                       uint8_t num_simulcast_streams,
                       const VideoBitrateAllocation& target_bitrate,
-                      SimulcastStream simulcast_streams[kMaxSimulcastStreams],
+                      SpatialLayer simulcast_streams[kMaxSimulcastStreams],
                       int framerate) RTC_LOCKS_EXCLUDED(mutex_);
 
   // Called before the frame is passed to callback_->OnEncodedImage, to let
-  // subclasses fill out codec_specific, possibly modify encodedImage.
-  // Returns an RTPFragmentationHeader, if needed by the codec.
-  virtual std::unique_ptr<RTPFragmentationHeader> EncodeHook(
-      EncodedImage* encoded_image,
-      CodecSpecificInfo* codec_specific);
+  // subclasses fill out CodecSpecificInfo, possibly modify |encoded_image| or
+  // |buffer|.
+  virtual CodecSpecificInfo EncodeHook(
+      EncodedImage& encoded_image,
+      rtc::scoped_refptr<EncodedImageBuffer> buffer);
 
   void SetRatesLocked(const RateControlParameters& parameters)
       RTC_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
@@ -117,9 +116,9 @@ class FakeH264Encoder : public FakeEncoder {
   virtual ~FakeH264Encoder() = default;
 
  private:
-  std::unique_ptr<RTPFragmentationHeader> EncodeHook(
-      EncodedImage* encoded_image,
-      CodecSpecificInfo* codec_specific) override;
+  CodecSpecificInfo EncodeHook(
+      EncodedImage& encoded_image,
+      rtc::scoped_refptr<EncodedImageBuffer> buffer) override;
 
   int idr_counter_ RTC_GUARDED_BY(local_mutex_);
   Mutex local_mutex_;

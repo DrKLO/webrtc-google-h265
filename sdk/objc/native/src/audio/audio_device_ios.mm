@@ -124,6 +124,7 @@ AudioDeviceIOS::AudioDeviceIOS()
 AudioDeviceIOS::~AudioDeviceIOS() {
   RTC_DCHECK(thread_checker_.IsCurrent());
   LOGI() << "~dtor" << ios::GetCurrentThreadDescription();
+  thread_->Clear(this);
   Terminate();
   audio_session_observer_ = nil;
 }

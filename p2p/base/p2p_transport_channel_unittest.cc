@@ -207,7 +207,7 @@ namespace cricket {
 // Note that this class is a base class for use by other tests, who will provide
 // specialized test behavior.
 class P2PTransportChannelTestBase : public ::testing::Test,
-                                    public rtc::MessageHandler,
+                                    public rtc::MessageHandlerAutoCleanup,
                                     public sigslot::has_slots<> {
  public:
   P2PTransportChannelTestBase()
@@ -3202,7 +3202,7 @@ class P2PTransportChannelPingTest : public ::testing::Test,
     }
     if (piggyback_ping_id) {
       msg.AddAttribute(std::make_unique<StunByteStringAttribute>(
-          STUN_ATTR_LAST_ICE_CHECK_RECEIVED, piggyback_ping_id.value()));
+          STUN_ATTR_GOOG_LAST_ICE_CHECK_RECEIVED, piggyback_ping_id.value()));
     }
     msg.SetTransactionID(rtc::CreateRandomString(kStunTransactionIdLength));
     msg.AddMessageIntegrity(conn->local_candidate().password());
@@ -3265,6 +3265,14 @@ class P2PTransportChannelPingTest : public ::testing::Test,
              last_candidate_change_event_->last_data_received_ms ==
                  conn->last_data_received() &&
              last_candidate_change_event_->reason == reason;
+    }
+  }
+
+  int64_t LastEstimatedDisconnectedTimeMs() const {
+    if (!last_candidate_change_event_.has_value()) {
+      return 0;
+    } else {
+      return last_candidate_change_event_->estimated_disconnected_time_ms;
     }
   }
 
@@ -3818,6 +3826,33 @@ TEST_F(P2PTransportChannelPingTest, TestPingOnSwitch) {
   EXPECT_EQ(conn2->num_pings_sent(), before + 1);
 }
 
+// Test the field trial send_ping_on_switch_ice_controlling
+// that sends a ping directly when selecteing a new connection
+// on the ICE_CONTROLLING-side (i.e also initial selection).
+TEST_F(P2PTransportChannelPingTest, TestPingOnSelected) {
+  webrtc::test::ScopedFieldTrials field_trials(
+      "WebRTC-IceFieldTrials/send_ping_on_selected_ice_controlling:true/");
+  FakePortAllocator pa(rtc::Thread::Current(), nullptr);
+  P2PTransportChannel ch("receiving state change", 1, &pa);
+  PrepareChannel(&ch);
+  ch.SetIceConfig(ch.config());
+  ch.SetIceRole(ICEROLE_CONTROLLING);
+  ch.MaybeStartGathering();
+  ch.AddRemoteCandidate(CreateUdpCandidate(LOCAL_PORT_TYPE, "1.1.1.1", 1, 1));
+  Connection* conn1 = WaitForConnectionTo(&ch, "1.1.1.1", 1);
+  ASSERT_TRUE(conn1 != nullptr);
+
+  const int before = conn1->num_pings_sent();
+
+  // A connection needs to be writable before it is selected for transmission.
+  conn1->ReceivedPingResponse(LOW_RTT, "id");
+  EXPECT_EQ_WAIT(conn1, ch.selected_connection(), kDefaultTimeout);
+  EXPECT_TRUE(CandidatePairMatchesNetworkRoute(conn1));
+
+  // And the additional ping should have been sent directly.
+  EXPECT_EQ(conn1->num_pings_sent(), before + 1);
+}
+
 // The controlled side will select a connection as the "selected connection"
 // based on requests from an unknown address before the controlling side
 // nominates a connection, and will nominate a connection from an unknown
@@ -4086,6 +4121,64 @@ TEST_F(P2PTransportChannelPingTest,
   // Make sure sorting won't reselect candidate pair.
   SIMULATED_WAIT(false, 100, clock);
   EXPECT_EQ(0, reset_selected_candidate_pair_switches());
+}
+
+TEST_F(P2PTransportChannelPingTest, TestEstimatedDisconnectedTime) {
+  rtc::ScopedFakeClock clock;
+  clock.AdvanceTime(webrtc::TimeDelta::Seconds(1));
+
+  FakePortAllocator pa(rtc::Thread::Current(), nullptr);
+  P2PTransportChannel ch("test", 1, &pa);
+  PrepareChannel(&ch);
+  ch.SetIceRole(ICEROLE_CONTROLLED);
+  ch.MaybeStartGathering();
+  // The connections have decreasing priority.
+  Connection* conn1 =
+      CreateConnectionWithCandidate(&ch, &clock, "1.1.1.1", /* port= */ 1,
+                                    /* priority= */ 10, /* writable= */ true);
+  ASSERT_TRUE(conn1 != nullptr);
+  Connection* conn2 =
+      CreateConnectionWithCandidate(&ch, &clock, "2.2.2.2", /* port= */ 2,
+                                    /* priority= */ 9, /* writable= */ true);
+  ASSERT_TRUE(conn2 != nullptr);
+
+  // conn1 is the selected connection because it has a higher priority,
+  EXPECT_EQ_SIMULATED_WAIT(conn1, ch.selected_connection(), kDefaultTimeout,
+                           clock);
+  EXPECT_TRUE(CandidatePairMatchesNetworkRoute(conn1));
+  // No estimateded disconnect time at first connect <=> value is 0.
+  EXPECT_EQ(LastEstimatedDisconnectedTimeMs(), 0);
+
+  // Use nomination to force switching of selected connection.
+  int nomination = 1;
+
+  {
+    clock.AdvanceTime(webrtc::TimeDelta::Seconds(1));
+    // This will not parse as STUN, and is considered data
+    conn1->OnReadPacket("XYZ", 3, rtc::TimeMicros());
+    clock.AdvanceTime(webrtc::TimeDelta::Seconds(2));
+
+    // conn2 is nominated; it becomes selected.
+    NominateConnection(conn2, nomination++);
+    EXPECT_EQ(conn2, ch.selected_connection());
+    // We got data 2s ago...guess that we lost 2s of connectivity.
+    EXPECT_EQ(LastEstimatedDisconnectedTimeMs(), 2000);
+  }
+
+  {
+    clock.AdvanceTime(webrtc::TimeDelta::Seconds(1));
+    conn2->OnReadPacket("XYZ", 3, rtc::TimeMicros());
+
+    clock.AdvanceTime(webrtc::TimeDelta::Seconds(2));
+    ReceivePingOnConnection(conn2, kIceUfrag[1], 1, nomination++);
+
+    clock.AdvanceTime(webrtc::TimeDelta::Millis(500));
+
+    ReceivePingOnConnection(conn1, kIceUfrag[1], 1, nomination++);
+    EXPECT_EQ(conn1, ch.selected_connection());
+    // We got ping 500ms ago...guess that we lost 500ms of connectivity.
+    EXPECT_EQ(LastEstimatedDisconnectedTimeMs(), 500);
+  }
 }
 
 TEST_F(P2PTransportChannelPingTest,

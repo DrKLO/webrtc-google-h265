@@ -1256,10 +1256,11 @@ void JsepTransportController::UpdateAggregateStates_n() {
   }
   if (ice_connection_state_ != new_connection_state) {
     ice_connection_state_ = new_connection_state;
-    invoker_.AsyncInvoke<void>(RTC_FROM_HERE, signaling_thread_,
-                               [this, new_connection_state] {
-                                 SignalIceConnectionState(new_connection_state);
-                               });
+
+    invoker_.AsyncInvoke<void>(
+        RTC_FROM_HERE, signaling_thread_, [this, new_connection_state] {
+          SignalIceConnectionState.Send(new_connection_state);
+        });
   }
 
   // Compute the current RTCIceConnectionState as described in
@@ -1381,7 +1382,10 @@ void JsepTransportController::UpdateAggregateStates_n() {
                                });
   }
 
-  if (all_done_gathering) {
+  // Compute the gathering state.
+  if (dtls_transports.empty()) {
+    new_gathering_state = cricket::kIceGatheringNew;
+  } else if (all_done_gathering) {
     new_gathering_state = cricket::kIceGatheringComplete;
   } else if (any_gathering) {
     new_gathering_state = cricket::kIceGatheringGathering;

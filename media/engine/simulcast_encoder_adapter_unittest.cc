@@ -232,6 +232,8 @@ class MockVideoEncoder : public VideoEncoder {
     info.implementation_name = implementation_name_;
     info.scaling_settings = scaling_settings_;
     info.requested_resolution_alignment = requested_resolution_alignment_;
+    info.apply_alignment_to_all_simulcast_layers =
+        apply_alignment_to_all_simulcast_layers_;
     info.has_trusted_rate_controller = has_trusted_rate_controller_;
     info.is_hardware_accelerated = is_hardware_accelerated_;
     info.has_internal_source = has_internal_source_;
@@ -251,7 +253,7 @@ class MockVideoEncoder : public VideoEncoder {
     image._encodedHeight = height;
     CodecSpecificInfo codec_specific_info;
     codec_specific_info.codecType = webrtc::kVideoCodecVP8;
-    callback_->OnEncodedImage(image, &codec_specific_info, nullptr);
+    callback_->OnEncodedImage(image, &codec_specific_info);
   }
 
   void set_supports_native_handle(bool enabled) {
@@ -272,6 +274,10 @@ class MockVideoEncoder : public VideoEncoder {
 
   void set_requested_resolution_alignment(int requested_resolution_alignment) {
     requested_resolution_alignment_ = requested_resolution_alignment;
+  }
+
+  void set_apply_alignment_to_all_simulcast_layers(bool apply) {
+    apply_alignment_to_all_simulcast_layers_ = apply;
   }
 
   void set_has_trusted_rate_controller(bool trusted) {
@@ -310,6 +316,7 @@ class MockVideoEncoder : public VideoEncoder {
   std::string implementation_name_ = "unknown";
   VideoEncoder::ScalingSettings scaling_settings_;
   int requested_resolution_alignment_ = 1;
+  bool apply_alignment_to_all_simulcast_layers_ = false;
   bool has_trusted_rate_controller_ = false;
   bool is_hardware_accelerated_ = false;
   bool has_internal_source_ = false;
@@ -422,8 +429,7 @@ class TestSimulcastEncoderAdapterFake : public ::testing::Test,
   }
 
   Result OnEncodedImage(const EncodedImage& encoded_image,
-                        const CodecSpecificInfo* codec_specific_info,
-                        const RTPFragmentationHeader* fragmentation) override {
+                        const CodecSpecificInfo* codec_specific_info) override {
     last_encoded_image_width_ = encoded_image._encodedWidth;
     last_encoded_image_height_ = encoded_image._encodedHeight;
     last_encoded_image_simulcast_index_ =
@@ -1258,6 +1264,31 @@ TEST_F(TestSimulcastEncoderAdapterFake,
   EXPECT_EQ(0, adapter_->InitEncode(&codec_, kSettings));
 
   EXPECT_EQ(adapter_->GetEncoderInfo().requested_resolution_alignment, 28);
+}
+
+TEST_F(TestSimulcastEncoderAdapterFake,
+       ReportsApplyAlignmentToSimulcastLayers) {
+  SimulcastTestFixtureImpl::DefaultSettings(
+      &codec_, static_cast<const int*>(kTestTemporalLayerProfile),
+      kVideoCodecVP8);
+  codec_.numberOfSimulcastStreams = 3;
+
+  // No encoder has apply_alignment_to_all_simulcast_layers, report false.
+  EXPECT_EQ(0, adapter_->InitEncode(&codec_, kSettings));
+  ASSERT_EQ(3u, helper_->factory()->encoders().size());
+  for (MockVideoEncoder* encoder : helper_->factory()->encoders()) {
+    encoder->set_apply_alignment_to_all_simulcast_layers(false);
+  }
+  EXPECT_FALSE(
+      adapter_->GetEncoderInfo().apply_alignment_to_all_simulcast_layers);
+
+  // One encoder has apply_alignment_to_all_simulcast_layers, report true.
+  helper_->factory()
+      ->encoders()[1]
+      ->set_apply_alignment_to_all_simulcast_layers(true);
+  EXPECT_EQ(0, adapter_->InitEncode(&codec_, kSettings));
+  EXPECT_TRUE(
+      adapter_->GetEncoderInfo().apply_alignment_to_all_simulcast_layers);
 }
 
 TEST_F(TestSimulcastEncoderAdapterFake, ReportsInternalSource) {

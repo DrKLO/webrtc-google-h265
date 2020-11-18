@@ -38,6 +38,7 @@
 
 #include <iomanip>
 
+#include "rtc_base/checks.h"
 #include "rtc_base/logging.h"
 #include "rtc_base/platform_thread.h"
 #include "rtc_base/string_utils.h"
@@ -226,7 +227,7 @@ bool AudioDeviceWindowsCore::CoreAudioIsSupported() {
   // by a corresponding call to CoUninitialize.
   //
   ScopedCOMInitializer comInit(ScopedCOMInitializer::kMTA);
-  if (!comInit.succeeded()) {
+  if (!comInit.Succeeded()) {
     // Things will work even if an STA thread is calling this method but we
     // want to ensure that MTA is used and therefore return false here.
     return false;
@@ -395,7 +396,7 @@ AudioDeviceWindowsCore::AudioDeviceWindowsCore()
       _inputDeviceIndex(0),
       _outputDeviceIndex(0) {
   RTC_LOG(LS_INFO) << __FUNCTION__ << " created";
-  assert(_comInit.succeeded());
+  RTC_DCHECK(_comInit.Succeeded());
 
   // Try to load the Avrt DLL
   if (!_avrtLibrary) {
@@ -641,7 +642,10 @@ bool AudioDeviceWindowsCore::Initialized() const {
 
 int32_t AudioDeviceWindowsCore::InitSpeaker() {
   MutexLock lock(&mutex_);
+  return InitSpeakerLocked();
+}
 
+int32_t AudioDeviceWindowsCore::InitSpeakerLocked() {
   if (_playing) {
     return -1;
   }
@@ -651,7 +655,7 @@ int32_t AudioDeviceWindowsCore::InitSpeaker() {
   }
 
   if (_usingOutputDeviceIndex) {
-    int16_t nDevices = PlayoutDevices();
+    int16_t nDevices = PlayoutDevicesLocked();
     if (_outputDeviceIndex > (nDevices - 1)) {
       RTC_LOG(LS_ERROR) << "current device selection is invalid => unable to"
                            " initialize";
@@ -710,7 +714,10 @@ int32_t AudioDeviceWindowsCore::InitSpeaker() {
 
 int32_t AudioDeviceWindowsCore::InitMicrophone() {
   MutexLock lock(&mutex_);
+  return InitMicrophoneLocked();
+}
 
+int32_t AudioDeviceWindowsCore::InitMicrophoneLocked() {
   if (_recording) {
     return -1;
   }
@@ -720,7 +727,7 @@ int32_t AudioDeviceWindowsCore::InitMicrophone() {
   }
 
   if (_usingInputDeviceIndex) {
-    int16_t nDevices = RecordingDevices();
+    int16_t nDevices = RecordingDevicesLocked();
     if (_inputDeviceIndex > (nDevices - 1)) {
       RTC_LOG(LS_ERROR) << "current device selection is invalid => unable to"
                            " initialize";
@@ -1368,10 +1375,12 @@ int32_t AudioDeviceWindowsCore::MinMicrophoneVolume(uint32_t& minVolume) const {
 // ----------------------------------------------------------------------------
 //  PlayoutDevices
 // ----------------------------------------------------------------------------
-
 int16_t AudioDeviceWindowsCore::PlayoutDevices() {
   MutexLock lock(&mutex_);
+  return PlayoutDevicesLocked();
+}
 
+int16_t AudioDeviceWindowsCore::PlayoutDevicesLocked() {
   if (_RefreshDeviceList(eRender) != -1) {
     return (_DeviceListCount(eRender));
   }
@@ -1634,7 +1643,10 @@ int32_t AudioDeviceWindowsCore::RecordingDeviceName(
 
 int16_t AudioDeviceWindowsCore::RecordingDevices() {
   MutexLock lock(&mutex_);
+  return RecordingDevicesLocked();
+}
 
+int16_t AudioDeviceWindowsCore::RecordingDevicesLocked() {
   if (_RefreshDeviceList(eCapture) != -1) {
     return (_DeviceListCount(eCapture));
   }
@@ -1800,7 +1812,7 @@ int32_t AudioDeviceWindowsCore::InitPlayout() {
   }
 
   // Initialize the speaker (devices might have been added or removed)
-  if (InitSpeaker() == -1) {
+  if (InitSpeakerLocked() == -1) {
     RTC_LOG(LS_WARNING) << "InitSpeaker() failed";
   }
 
@@ -2119,7 +2131,7 @@ int32_t AudioDeviceWindowsCore::InitRecording() {
   }
 
   // Initialize the microphone (devices might have been added or removed)
-  if (InitMicrophone() == -1) {
+  if (InitMicrophoneLocked() == -1) {
     RTC_LOG(LS_WARNING) << "InitMicrophone() failed";
   }
 
@@ -2353,7 +2365,6 @@ int32_t AudioDeviceWindowsCore::StartRecording() {
 
     // Set thread priority to highest possible
     SetThreadPriority(_hRecThread, THREAD_PRIORITY_TIME_CRITICAL);
-
   }  // critScoped
 
   DWORD ret = WaitForSingleObject(_hCaptureStartedEvent, 1000);
@@ -2641,7 +2652,7 @@ DWORD AudioDeviceWindowsCore::DoRenderThread() {
 
   // Initialize COM as MTA in this thread.
   ScopedCOMInitializer comInit(ScopedCOMInitializer::kMTA);
-  if (!comInit.succeeded()) {
+  if (!comInit.Succeeded()) {
     RTC_LOG(LS_ERROR) << "failed to initialize COM in render thread";
     return 1;
   }
@@ -2948,7 +2959,7 @@ DWORD AudioDeviceWindowsCore::DoCaptureThreadPollDMO() {
 
   // Initialize COM as MTA in this thread.
   ScopedCOMInitializer comInit(ScopedCOMInitializer::kMTA);
-  if (!comInit.succeeded()) {
+  if (!comInit.Succeeded()) {
     RTC_LOG(LS_ERROR) << "failed to initialize COM in polling DMO thread";
     return 1;
   }
@@ -3080,7 +3091,7 @@ DWORD AudioDeviceWindowsCore::DoCaptureThread() {
 
   // Initialize COM as MTA in this thread.
   ScopedCOMInitializer comInit(ScopedCOMInitializer::kMTA);
-  if (!comInit.succeeded()) {
+  if (!comInit.Succeeded()) {
     RTC_LOG(LS_ERROR) << "failed to initialize COM in capture thread";
     return 1;
   }
@@ -3416,7 +3427,7 @@ int AudioDeviceWindowsCore::SetDMOProperties() {
   // MFPKEY_WMAAECMA_FEATR_AGC - Digital AGC (disabled).
   // MFPKEY_WMAAECMA_FEATR_CENTER_CLIP - AEC center clipping (enabled).
   // MFPKEY_WMAAECMA_FEATR_ECHO_LENGTH - Filter length (256 ms).
-  //   TODO(andrew): investigate decresing the length to 128 ms.
+  // TODO(andrew): investigate decresing the length to 128 ms.
   // MFPKEY_WMAAECMA_FEATR_FRAME_SIZE - Frame size (0).
   //   0 is automatic; defaults to 160 samples (or 10 ms frames at the
   //   selected 16 kHz) as long as mic array processing is disabled.

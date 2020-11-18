@@ -81,20 +81,12 @@ class SimulcastTestFixtureImpl::TestEncodedImageCallback
     // Only store the base layer.
     if (encoded_image.SpatialIndex().value_or(0) == 0) {
       if (encoded_image._frameType == VideoFrameType::kVideoFrameKey) {
-        // TODO(nisse): Why not size() ?
-        encoded_key_frame_.SetEncodedData(
-            EncodedImageBuffer::Create(encoded_image.capacity()));
-        encoded_key_frame_.set_size(encoded_image.size());
+        encoded_key_frame_.SetEncodedData(EncodedImageBuffer::Create(
+            encoded_image.data(), encoded_image.size()));
         encoded_key_frame_._frameType = VideoFrameType::kVideoFrameKey;
-        encoded_key_frame_._completeFrame = encoded_image._completeFrame;
-        memcpy(encoded_key_frame_.data(), encoded_image.data(),
-               encoded_image.size());
       } else {
-        encoded_frame_.SetEncodedData(
-            EncodedImageBuffer::Create(encoded_image.capacity()));
-        encoded_frame_.set_size(encoded_image.size());
-        memcpy(encoded_frame_.data(), encoded_image.data(),
-               encoded_image.size());
+        encoded_frame_.SetEncodedData(EncodedImageBuffer::Create(
+            encoded_image.data(), encoded_image.size()));
       }
     }
     if (is_vp8) {
@@ -196,7 +188,7 @@ void ConfigureStream(int width,
                      int min_bitrate,
                      int target_bitrate,
                      float max_framerate,
-                     SimulcastStream* stream,
+                     SpatialLayer* stream,
                      int num_temporal_layers) {
   assert(stream);
   stream->width = width;
@@ -220,7 +212,7 @@ void SimulcastTestFixtureImpl::DefaultSettings(
     VideoCodecType codec_type,
     bool reverse_layer_order) {
   RTC_CHECK(settings);
-  memset(settings, 0, sizeof(VideoCodec));
+  *settings = {};
   settings->codecType = codec_type;
   settings->startBitrate = 300;
   settings->minBitrate = 30;
@@ -873,14 +865,9 @@ void SimulcastTestFixtureImpl::TestDecodeWidthHeightSet() {
             EXPECT_EQ(encoded_image._frameType, VideoFrameType::kVideoFrameKey);
 
             size_t index = encoded_image.SpatialIndex().value_or(0);
-            // TODO(nisse): Why not size()
-            encoded_frame[index].SetEncodedData(
-                EncodedImageBuffer::Create(encoded_image.capacity()));
-            encoded_frame[index].set_size(encoded_image.size());
+            encoded_frame[index].SetEncodedData(EncodedImageBuffer::Create(
+                encoded_image.data(), encoded_image.size()));
             encoded_frame[index]._frameType = encoded_image._frameType;
-            encoded_frame[index]._completeFrame = encoded_image._completeFrame;
-            memcpy(encoded_frame[index].data(), encoded_image.data(),
-                   encoded_image.size());
             return EncodedImageCallback::Result(
                 EncodedImageCallback::Result::OK, 0);
           }));
@@ -914,5 +901,15 @@ void SimulcastTestFixtureImpl::TestDecodeWidthHeightSet() {
   EXPECT_EQ(0, decoder_->Decode(encoded_frame[2], false, 0));
 }
 
+void SimulcastTestFixtureImpl::
+    TestEncoderInfoForDefaultTemporalLayerProfileHasFpsAllocation() {
+  VideoEncoder::EncoderInfo encoder_info = encoder_->GetEncoderInfo();
+  EXPECT_EQ(encoder_info.fps_allocation[0].size(),
+            static_cast<size_t>(kDefaultTemporalLayerProfile[0]));
+  EXPECT_EQ(encoder_info.fps_allocation[1].size(),
+            static_cast<size_t>(kDefaultTemporalLayerProfile[1]));
+  EXPECT_EQ(encoder_info.fps_allocation[2].size(),
+            static_cast<size_t>(kDefaultTemporalLayerProfile[2]));
+}
 }  // namespace test
 }  // namespace webrtc

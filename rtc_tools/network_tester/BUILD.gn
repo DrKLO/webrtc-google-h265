@@ -123,6 +123,7 @@ if (is_android) {
       "androidapp/src/com/google/media/networktester/NetworkTester.java",
     ]
 
+    resources_package = "com.google.media.networktester"
     deps = [
       ":NetworkTesterMobile_resources",
       "../../rtc_base:base_java",

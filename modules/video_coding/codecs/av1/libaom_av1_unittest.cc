@@ -22,14 +22,14 @@
 #include "api/units/time_delta.h"
 #include "api/video_codecs/video_codec.h"
 #include "api/video_codecs/video_encoder.h"
-#include "modules/video_coding/codecs/av1/create_scalability_structure.h"
 #include "modules/video_coding/codecs/av1/libaom_av1_decoder.h"
 #include "modules/video_coding/codecs/av1/libaom_av1_encoder.h"
-#include "modules/video_coding/codecs/av1/scalable_video_controller.h"
-#include "modules/video_coding/codecs/av1/scalable_video_controller_no_layering.h"
 #include "modules/video_coding/codecs/test/encoded_video_frame_producer.h"
 #include "modules/video_coding/include/video_codec_interface.h"
 #include "modules/video_coding/include/video_error_codes.h"
+#include "modules/video_coding/svc/create_scalability_structure.h"
+#include "modules/video_coding/svc/scalable_video_controller.h"
+#include "modules/video_coding/svc/scalable_video_controller_no_layering.h"
 #include "test/gmock.h"
 #include "test/gtest.h"
 
@@ -179,14 +179,13 @@ struct SvcTestParam {
 class LibaomAv1SvcTest : public ::testing::TestWithParam<SvcTestParam> {};
 
 TEST_P(LibaomAv1SvcTest, EncodeAndDecodeAllDecodeTargets) {
-  std::unique_ptr<ScalableVideoController> svc_controller =
-      CreateScalabilityStructure(GetParam().name);
-  size_t num_decode_targets =
-      svc_controller->DependencyStructure().num_decode_targets;
+  size_t num_decode_targets = CreateScalabilityStructure(GetParam().name)
+                                  ->DependencyStructure()
+                                  .num_decode_targets;
 
-  std::unique_ptr<VideoEncoder> encoder =
-      CreateLibaomAv1Encoder(std::move(svc_controller));
+  std::unique_ptr<VideoEncoder> encoder = CreateLibaomAv1Encoder();
   VideoCodec codec_settings = DefaultCodecSettings();
+  codec_settings.SetScalabilityMode(GetParam().name);
   ASSERT_EQ(encoder->InitEncode(&codec_settings, DefaultEncoderSettings()),
             WEBRTC_VIDEO_CODEC_OK);
   std::vector<EncodedVideoFrameProducer::EncodedFrame> encoded_frames =

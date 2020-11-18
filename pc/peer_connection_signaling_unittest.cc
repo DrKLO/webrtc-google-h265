@@ -17,12 +17,14 @@
 #include "api/audio_codecs/builtin_audio_decoder_factory.h"
 #include "api/audio_codecs/builtin_audio_encoder_factory.h"
 #include "api/create_peerconnection_factory.h"
+#include "api/jsep_session_description.h"
 #include "api/peer_connection_proxy.h"
 #include "api/video_codecs/builtin_video_decoder_factory.h"
 #include "api/video_codecs/builtin_video_encoder_factory.h"
 #include "pc/peer_connection.h"
 #include "pc/peer_connection_wrapper.h"
 #include "pc/sdp_utils.h"
+#include "pc/webrtc_sdp.h"
 #ifdef WEBRTC_ANDROID
 #include "pc/test/android_test_initializer.h"
 #endif
@@ -841,6 +843,64 @@ TEST_P(PeerConnectionSignalingTest,
       observer->error());
 }
 
+TEST_P(PeerConnectionSignalingTest, UnsupportedContentType) {
+  auto caller = CreatePeerConnection();
+
+  // Call setRemoteDescription with a m= line we don't understand.
+  std::string sdp =
+      "v=0\r\n"
+      "o=- 18446744069414584320 18446462598732840960 IN IP4 127.0.0.1\r\n"
+      "s=-\r\n"
+      "t=0 0\r\n"
+      "m=bogus 9 FOO 0 8\r\n"
+      "c=IN IP4 0.0.0.0\r\n"
+      "a=mid:bogusmid\r\n";
+  std::unique_ptr<webrtc::SessionDescriptionInterface> remote_description =
+      webrtc::CreateSessionDescription(SdpType::kOffer, sdp, nullptr);
+
+  EXPECT_TRUE(caller->SetRemoteDescription(std::move(remote_description)));
+
+  // Assert we respond back with something meaningful.
+  auto answer = caller->CreateAnswer();
+  ASSERT_EQ(answer->description()->contents().size(), 1u);
+  EXPECT_NE(answer->description()
+                ->contents()[0]
+                .media_description()
+                ->as_unsupported(),
+            nullptr);
+  EXPECT_EQ(answer->description()
+                ->contents()[0]
+                .media_description()
+                ->as_unsupported()
+                ->media_type(),
+            "bogus");
+  EXPECT_TRUE(answer->description()->contents()[0].rejected);
+  EXPECT_EQ(answer->description()->contents()[0].mid(), "bogusmid");
+  EXPECT_EQ(
+      answer->description()->contents()[0].media_description()->protocol(),
+      "FOO");
+  EXPECT_FALSE(
+      answer->description()->contents()[0].media_description()->has_codecs());
+
+  EXPECT_TRUE(caller->SetLocalDescription(std::move(answer)));
+
+  // Assert we keep this in susequent offers.
+  auto offer = caller->CreateOffer();
+  EXPECT_EQ(offer->description()
+                ->contents()[0]
+                .media_description()
+                ->as_unsupported()
+                ->media_type(),
+            "bogus");
+  EXPECT_TRUE(offer->description()->contents()[0].rejected);
+  EXPECT_EQ(offer->description()->contents()[0].media_description()->protocol(),
+            "FOO");
+  EXPECT_EQ(offer->description()->contents()[0].mid(), "bogusmid");
+  EXPECT_FALSE(
+      offer->description()->contents()[0].media_description()->has_codecs());
+  EXPECT_TRUE(caller->SetLocalDescription(std::move(offer)));
+}
+
 INSTANTIATE_TEST_SUITE_P(PeerConnectionSignalingTest,
                          PeerConnectionSignalingTest,
                          Values(SdpSemantics::kPlanB,
@@ -974,6 +1034,70 @@ TEST_F(PeerConnectionSignalingUnifiedPlanTest,
   EXPECT_EQ(2, NumberOfDtlsTransports(caller));
 
   ASSERT_EQ(SignalingState::kStable, caller->signaling_state());
+}
+
+TEST_F(PeerConnectionSignalingUnifiedPlanTest,
+       ShouldFireNegotiationNeededWhenNoChangesArePending) {
+  auto caller = CreatePeerConnection();
+  EXPECT_FALSE(caller->observer()->has_negotiation_needed_event());
+  auto transceiver =
+      caller->AddTransceiver(cricket::MEDIA_TYPE_AUDIO, RtpTransceiverInit());
+  EXPECT_TRUE(caller->observer()->has_negotiation_needed_event());
+  EXPECT_TRUE(caller->pc()->ShouldFireNegotiationNeededEvent(
+      caller->observer()->latest_negotiation_needed_event()));
+}
+
+TEST_F(PeerConnectionSignalingUnifiedPlanTest,
+       SuppressNegotiationNeededWhenOperationChainIsNotEmpty) {
+  auto caller = CreatePeerConnection();
+  EXPECT_FALSE(caller->observer()->has_negotiation_needed_event());
+  auto transceiver =
+      caller->AddTransceiver(cricket::MEDIA_TYPE_AUDIO, RtpTransceiverInit());
+  EXPECT_TRUE(caller->observer()->has_negotiation_needed_event());
+
+  rtc::scoped_refptr<MockCreateSessionDescriptionObserver> observer =
+      new rtc::RefCountedObject<MockCreateSessionDescriptionObserver>();
+  caller->pc()->CreateOffer(observer, RTCOfferAnswerOptions());
+  // For this test to work, the operation has to be pending, i.e. the observer
+  // has not yet been invoked.
+  EXPECT_FALSE(observer->called());
+  // Because the Operations Chain is not empty, the event is now suppressed.
+  EXPECT_FALSE(caller->pc()->ShouldFireNegotiationNeededEvent(
+      caller->observer()->latest_negotiation_needed_event()));
+  caller->observer()->clear_latest_negotiation_needed_event();
+
+  // When the Operations Chain becomes empty again, a new negotiation needed
+  // event will be generated that is not suppressed.
+  EXPECT_TRUE_WAIT(observer->called(), kWaitTimeout);
+  EXPECT_TRUE(caller->observer()->has_negotiation_needed_event());
+  EXPECT_TRUE(caller->pc()->ShouldFireNegotiationNeededEvent(
+      caller->observer()->latest_negotiation_needed_event()));
+}
+
+TEST_F(PeerConnectionSignalingUnifiedPlanTest,
+       SuppressNegotiationNeededWhenSignalingStateIsNotStable) {
+  auto caller = CreatePeerConnection();
+  auto callee = CreatePeerConnection();
+  auto offer = caller->CreateOffer(RTCOfferAnswerOptions());
+
+  EXPECT_FALSE(caller->observer()->has_negotiation_needed_event());
+  auto transceiver =
+      callee->AddTransceiver(cricket::MEDIA_TYPE_AUDIO, RtpTransceiverInit());
+  EXPECT_TRUE(callee->observer()->has_negotiation_needed_event());
+
+  // Change signaling state (to "have-remote-offer") by setting a remote offer.
+  callee->SetRemoteDescription(std::move(offer));
+  // Because the signaling state is not "stable", the event is now suppressed.
+  EXPECT_FALSE(callee->pc()->ShouldFireNegotiationNeededEvent(
+      callee->observer()->latest_negotiation_needed_event()));
+  callee->observer()->clear_latest_negotiation_needed_event();
+
+  // Upon rolling back to "stable", a new negotiation needed event will be
+  // generated that is not suppressed.
+  callee->SetLocalDescription(CreateSessionDescription(SdpType::kRollback, ""));
+  EXPECT_TRUE(callee->observer()->has_negotiation_needed_event());
+  EXPECT_TRUE(callee->pc()->ShouldFireNegotiationNeededEvent(
+      callee->observer()->latest_negotiation_needed_event()));
 }
 
 }  // namespace webrtc

@@ -284,6 +284,7 @@ VideoEncoderConfig CreateVideoEncoderConfig(VideoStreamConfig config) {
   if (config.encoder.max_framerate) {
     for (auto& layer : encoder_config.simulcast_layers) {
       layer.max_framerate = *config.encoder.max_framerate;
+      layer.min_bitrate_bps = config.encoder.min_data_rate->bps_or(-1);
     }
   }
 
@@ -431,6 +432,8 @@ SendVideoStream::SendVideoStream(CallClient* sender,
   send_config.encoder_settings.encoder_factory = encoder_factory_.get();
   send_config.encoder_settings.bitrate_allocator_factory =
       bitrate_allocator_factory_.get();
+  send_config.suspend_below_min_bitrate =
+      config.encoder.suspend_below_min_bitrate;
 
   sender_->SendTask([&] {
     if (config.stream.fec_controller_factory) {
@@ -482,7 +485,8 @@ void SendVideoStream::UpdateConfig(
       }
     }
     // TODO(srte): Add more conditions that should cause reconfiguration.
-    if (prior_config.encoder.max_framerate != config_.encoder.max_framerate) {
+    if (prior_config.encoder.max_framerate != config_.encoder.max_framerate ||
+        prior_config.encoder.max_data_rate != config_.encoder.max_data_rate) {
       VideoEncoderConfig encoder_config = CreateVideoEncoderConfig(config_);
       send_stream_->ReconfigureVideoEncoder(std::move(encoder_config));
     }
@@ -498,14 +502,12 @@ void SendVideoStream::UpdateActiveLayers(std::vector<bool> active_layers) {
     if (config_.encoder.codec ==
         VideoStreamConfig::Encoder::Codec::kVideoCodecVP8) {
       send_stream_->UpdateActiveSimulcastLayers(active_layers);
-    } else {
-      VideoEncoderConfig encoder_config = CreateVideoEncoderConfig(config_);
-      RTC_CHECK_EQ(encoder_config.simulcast_layers.size(),
-                   active_layers.size());
-      for (size_t i = 0; i < encoder_config.simulcast_layers.size(); ++i)
-        encoder_config.simulcast_layers[i].active = active_layers[i];
-      send_stream_->ReconfigureVideoEncoder(std::move(encoder_config));
     }
+    VideoEncoderConfig encoder_config = CreateVideoEncoderConfig(config_);
+    RTC_CHECK_EQ(encoder_config.simulcast_layers.size(), active_layers.size());
+    for (size_t i = 0; i < encoder_config.simulcast_layers.size(); ++i)
+      encoder_config.simulcast_layers[i].active = active_layers[i];
+    send_stream_->ReconfigureVideoEncoder(std::move(encoder_config));
   });
 }
 

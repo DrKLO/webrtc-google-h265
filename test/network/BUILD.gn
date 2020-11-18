@@ -10,13 +10,13 @@ import("../../webrtc.gni")
 
 rtc_library("emulated_network") {
   visibility = [
-    "../../api:create_network_emulation_manager",
     ":*",
+    "../../api:create_network_emulation_manager",
   ]
   if (rtc_include_tests) {
     visibility += [
-      "../scenario:*",
       "../peer_scenario:*",
+      "../scenario:*",
     ]
   }
   testonly = true
@@ -25,6 +25,8 @@ rtc_library("emulated_network") {
     "cross_traffic.h",
     "emulated_network_manager.cc",
     "emulated_network_manager.h",
+    "emulated_turn_server.cc",
+    "emulated_turn_server.h",
     "fake_network_socket_server.cc",
     "fake_network_socket_server.h",
     "network_emulation.cc",
@@ -37,13 +39,17 @@ rtc_library("emulated_network") {
   deps = [
     "../../api:array_view",
     "../../api:network_emulation_manager_api",
+    "../../api:packet_socket_factory",
     "../../api:simulated_network_api",
     "../../api:time_controller",
+    "../../api/numerics",
+    "../../api/transport:stun_types",
     "../../api/units:data_rate",
     "../../api/units:data_size",
     "../../api/units:time_delta",
     "../../api/units:timestamp",
     "../../call:simulated_network",
+    "../../p2p:p2p_server_utils",
     "../../rtc_base",
     "../../rtc_base:rtc_base_tests_utils",
     "../../rtc_base:rtc_task_queue",
@@ -77,7 +83,6 @@ rtc_library("network_emulation_unittest") {
     "../../rtc_base:logging",
     "../../rtc_base:rtc_event",
     "../../rtc_base/synchronization:mutex",
-    "../../system_wrappers:system_wrappers",
   ]
 }
 
@@ -93,6 +98,7 @@ rtc_library("network_emulation_pc_unittest") {
     "../../api:simulated_network_api",
     "../../api/rtc_event_log:rtc_event_log_factory",
     "../../api/task_queue:default_task_queue_factory",
+    "../../api/transport:field_trial_based_config",
     "../../call:simulated_network",
     "../../media:rtc_audio_video",
     "../../media:rtc_media_engine_defaults",
@@ -113,6 +119,7 @@ rtc_library("cross_traffic_unittest") {
   deps = [
     ":emulated_network",
     "../:test_support",
+    "../../api:network_emulation_manager_api",
     "../../api:simulated_network_api",
     "../../call:simulated_network",
     "../../rtc_base",

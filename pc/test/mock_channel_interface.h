@@ -46,6 +46,7 @@ class MockChannelInterface : public cricket::ChannelInterface {
                webrtc::SdpType,
                std::string*),
               (override));
+  MOCK_METHOD(bool, SetPayloadTypeDemuxingEnabled, (bool), (override));
   MOCK_METHOD(const std::vector<StreamParams>&,
               local_streams,
               (),

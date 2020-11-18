@@ -22,6 +22,7 @@
 
 #include "absl/memory/memory.h"
 #include "absl/strings/str_replace.h"
+#include "api/media_stream_track.h"
 #include "api/rtp_parameters.h"
 #include "api/stats/rtc_stats_report.h"
 #include "api/stats/rtcstats_objects.h"
@@ -31,7 +32,6 @@
 #include "p2p/base/p2p_constants.h"
 #include "p2p/base/port.h"
 #include "pc/media_stream.h"
-#include "pc/media_stream_track.h"
 #include "pc/test/fake_data_channel_provider.h"
 #include "pc/test/fake_peer_connection_for_stats.h"
 #include "pc/test/mock_data_channel.h"
@@ -874,6 +874,7 @@ TEST_F(RTCStatsCollectorTest, CollectRTCCodecStats) {
   expected_inbound_audio_codec.clock_rate = 1337;
   expected_inbound_audio_codec.channels = 1;
   expected_inbound_audio_codec.sdp_fmtp_line = "minptime=10;useinbandfec=1";
+  expected_inbound_audio_codec.transport_id = "RTCTransport_TransportName_1";
 
   RTCCodecStats expected_outbound_audio_codec("RTCCodec_AudioMid_Outbound_2",
                                               report->timestamp_us());
@@ -881,6 +882,7 @@ TEST_F(RTCStatsCollectorTest, CollectRTCCodecStats) {
   expected_outbound_audio_codec.mime_type = "audio/isac";
   expected_outbound_audio_codec.clock_rate = 1338;
   expected_outbound_audio_codec.channels = 2;
+  expected_outbound_audio_codec.transport_id = "RTCTransport_TransportName_1";
 
   RTCCodecStats expected_inbound_video_codec("RTCCodec_VideoMid_Inbound_3",
                                              report->timestamp_us());
@@ -889,12 +891,14 @@ TEST_F(RTCStatsCollectorTest, CollectRTCCodecStats) {
   expected_inbound_video_codec.clock_rate = 1339;
   expected_inbound_video_codec.sdp_fmtp_line =
       "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f";
+  expected_inbound_video_codec.transport_id = "RTCTransport_TransportName_1";
 
   RTCCodecStats expected_outbound_video_codec("RTCCodec_VideoMid_Outbound_4",
                                               report->timestamp_us());
   expected_outbound_video_codec.payload_type = 4;
   expected_outbound_video_codec.mime_type = "video/VP8";
   expected_outbound_video_codec.clock_rate = 1340;
+  expected_outbound_video_codec.transport_id = "RTCTransport_TransportName_1";
 
   ASSERT_TRUE(report->Get(expected_inbound_audio_codec.id()));
   EXPECT_EQ(
@@ -1551,7 +1555,7 @@ TEST_F(RTCStatsCollectorTest,
   cricket::VoiceReceiverInfo voice_receiver_info;
   voice_receiver_info.local_stats.push_back(cricket::SsrcReceiverInfo());
   voice_receiver_info.local_stats[0].ssrc = 3;
-  voice_receiver_info.audio_level = 16383;
+  voice_receiver_info.audio_level = 16383;  // [0,32767]
   voice_receiver_info.total_output_energy = 0.125;
   voice_receiver_info.total_samples_received = 4567;
   voice_receiver_info.total_output_duration = 0.25;
@@ -1596,7 +1600,7 @@ TEST_F(RTCStatsCollectorTest,
   expected_remote_audio_track.remote_source = true;
   expected_remote_audio_track.ended = false;
   expected_remote_audio_track.detached = false;
-  expected_remote_audio_track.audio_level = 16383.0 / 32767.0;
+  expected_remote_audio_track.audio_level = 16383.0 / 32767.0;  // [0,1]
   expected_remote_audio_track.total_audio_energy = 0.125;
   expected_remote_audio_track.total_samples_received = 4567;
   expected_remote_audio_track.total_samples_duration = 0.25;
@@ -1791,7 +1795,7 @@ TEST_F(RTCStatsCollectorTest, CollectRTCInboundRTPStreamStats_Audio) {
   voice_media_info.receivers[0].concealment_events = 6;
   voice_media_info.receivers[0].inserted_samples_for_deceleration = 7;
   voice_media_info.receivers[0].removed_samples_for_acceleration = 8;
-  voice_media_info.receivers[0].audio_level = 9.0;
+  voice_media_info.receivers[0].audio_level = 14442;  // [0,32767]
   voice_media_info.receivers[0].total_output_energy = 10.0;
   voice_media_info.receivers[0].total_output_duration = 11.0;
 
@@ -1841,7 +1845,7 @@ TEST_F(RTCStatsCollectorTest, CollectRTCInboundRTPStreamStats_Audio) {
   expected_audio.concealment_events = 6;
   expected_audio.inserted_samples_for_deceleration = 7;
   expected_audio.removed_samples_for_acceleration = 8;
-  expected_audio.audio_level = 9.0;
+  expected_audio.audio_level = 14442.0 / 32767.0;  // [0,1]
   expected_audio.total_audio_energy = 10.0;
   expected_audio.total_samples_duration = 11.0;
 
@@ -2597,6 +2601,7 @@ class RTCStatsCollectorTestWithParamKind
       case cricket::MEDIA_TYPE_VIDEO:
         return "Video";
       case cricket::MEDIA_TYPE_DATA:
+      case cricket::MEDIA_TYPE_UNSUPPORTED:
         RTC_NOTREACHED();
         return "";
     }
@@ -2655,6 +2660,7 @@ class RTCStatsCollectorTestWithParamKind
         return;
       }
       case cricket::MEDIA_TYPE_DATA:
+      case cricket::MEDIA_TYPE_UNSUPPORTED:
         RTC_NOTREACHED();
     }
   }

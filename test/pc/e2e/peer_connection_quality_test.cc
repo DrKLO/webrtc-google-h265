@@ -21,7 +21,6 @@
 #include "api/rtc_event_log/rtc_event_log.h"
 #include "api/rtc_event_log_output_file.h"
 #include "api/scoped_refptr.h"
-#include "api/task_queue/default_task_queue_factory.h"
 #include "api/test/time_controller.h"
 #include "api/test/video_quality_analyzer_interface.h"
 #include "pc/sdp_utils.h"
@@ -109,7 +108,7 @@ PeerConnectionE2EQualityTest::PeerConnectionE2EQualityTest(
     std::unique_ptr<AudioQualityAnalyzerInterface> audio_quality_analyzer,
     std::unique_ptr<VideoQualityAnalyzerInterface> video_quality_analyzer)
     : time_controller_(time_controller),
-      task_queue_factory_(CreateDefaultTaskQueueFactory()),
+      task_queue_factory_(time_controller_.CreateTaskQueueFactory()),
       test_case_name_(std::move(test_case_name)),
       executor_(std::make_unique<TestActivitiesExecutor>(
           time_controller_.GetClock())) {
@@ -196,8 +195,8 @@ void PeerConnectionE2EQualityTest::Run(RunParams run_params) {
   const std::unique_ptr<rtc::Thread> signaling_thread =
       time_controller_.CreateThread(kSignalThreadName);
   media_helper_ = std::make_unique<MediaHelper>(
-      video_quality_analyzer_injection_helper_.get(),
-      task_queue_factory_.get());
+      video_quality_analyzer_injection_helper_.get(), task_queue_factory_.get(),
+      time_controller_.GetClock());
 
   // Create a |task_queue_|.
   task_queue_ = std::make_unique<webrtc::TaskQueueForTest>(

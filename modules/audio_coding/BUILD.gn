@@ -483,7 +483,7 @@ rtc_library("isac_c") {
     "codecs/isac/main/source/transform.c",
   ]
 
-  if (is_linux) {
+  if (is_linux || is_chromeos) {
     libs = [ "m" ]
   }
 
@@ -609,7 +609,7 @@ rtc_library("isac_fix_c") {
     "../../rtc_base:compile_assert_c",
     "../../rtc_base:rtc_base_approved",
     "../../rtc_base:sanitizer",
-    "../../system_wrappers:cpu_features_api",
+    "../../system_wrappers",
     "../third_party/fft",
   ]
 
@@ -793,7 +793,6 @@ rtc_library("webrtc_multiopus") {
     "../../api/units:time_delta",
     "../../rtc_base:checks",
     "../../rtc_base:logging",
-    "../../rtc_base:macromagic",
     "../../rtc_base:rtc_base_approved",
     "../../rtc_base:safe_minmax",
     "../../rtc_base:stringutils",
@@ -1391,8 +1390,6 @@ if (rtc_include_tests) {
       "../../rtc_base:checks",
       "../../rtc_base:rtc_base_approved",
       "../../rtc_base/synchronization:mutex",
-      "../../rtc_base/synchronization:rw_lock_wrapper",
-      "../../system_wrappers",
       "../../test:fileutils",
       "../../test:test_support",
     ]
@@ -1977,7 +1974,9 @@ if (rtc_include_tests) {
       "neteq/expand_unittest.cc",
       "neteq/histogram_unittest.cc",
       "neteq/merge_unittest.cc",
+      "neteq/mock/mock_buffer_level_filter.h",
       "neteq/mock/mock_decoder_database.h",
+      "neteq/mock/mock_delay_manager.h",
       "neteq/mock/mock_dtmf_buffer.h",
       "neteq/mock/mock_dtmf_tone_generator.h",
       "neteq/mock/mock_expand.h",
@@ -2067,7 +2066,6 @@ if (rtc_include_tests) {
       "../../rtc_base/synchronization:mutex",
       "../../rtc_base/system:arch",
       "../../system_wrappers",
-      "../../system_wrappers:cpu_features_api",
       "../../test:audio_codec_mocks",
       "../../test:field_trial",
       "../../test:fileutils",

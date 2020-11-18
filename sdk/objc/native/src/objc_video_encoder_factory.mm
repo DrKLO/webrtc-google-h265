@@ -16,11 +16,7 @@
 #import "base/RTCVideoEncoder.h"
 #import "base/RTCVideoEncoderFactory.h"
 #import "components/video_codec/RTCCodecSpecificInfoH264+Private.h"
-#ifndef DISABLE_H265
-#import "components/video_codec/RTCCodecSpecificInfoH265+Private.h"
-#endif
 #import "sdk/objc/api/peerconnection/RTCEncodedImage+Private.h"
-#import "sdk/objc/api/peerconnection/RTCRtpFragmentationHeader+Private.h"
 #import "sdk/objc/api/peerconnection/RTCVideoCodecInfo+Private.h"
 #import "sdk/objc/api/peerconnection/RTCVideoEncoderSettings+Private.h"
 #import "sdk/objc/api/video_codec/RTCVideoCodecConstants.h"
@@ -60,22 +56,12 @@ class ObjCVideoEncoder : public VideoEncoder {
 
       // Handle types that can be converted into one of CodecSpecificInfo's hard coded cases.
       CodecSpecificInfo codecSpecificInfo;
-      // Because of symbol conflict, isKindOfClass doesn't work as expected.
-      // See https://bugs.webkit.org/show_bug.cgi?id=198782.
       if ([info isKindOfClass:[RTC_OBJC_TYPE(RTCCodecSpecificInfoH264) class]]) {
         codecSpecificInfo =
-          [(RTC_OBJC_TYPE(RTCCodecSpecificInfoH264) *)info nativeCodecSpecificInfo];
-#ifndef DISABLE_H265
-      } else if ([NSStringFromClass([info class]) isEqual:@"RTCCodecSpecificInfoH265"]) {
-        // if ([info isKindOfClass:[RTCCodecSpecificInfoH265 class]]) {
-        codecSpecificInfo = [(RTCCodecSpecificInfoH265 *)info nativeCodecSpecificInfo];
-#endif
+            [(RTC_OBJC_TYPE(RTCCodecSpecificInfoH264) *)info nativeCodecSpecificInfo];
       }
 
-      std::unique_ptr<RTPFragmentationHeader> fragmentationHeader =
-          [header createNativeFragmentationHeader];
-      EncodedImageCallback::Result res =
-          callback->OnEncodedImage(encodedImage, &codecSpecificInfo, fragmentationHeader.get());
+      EncodedImageCallback::Result res = callback->OnEncodedImage(encodedImage, &codecSpecificInfo);
       return res.error == EncodedImageCallback::Result::OK;
     }];
 
@@ -186,20 +172,11 @@ std::vector<SdpVideoFormat> ObjCVideoEncoderFactory::GetImplementations() const 
 
 std::unique_ptr<VideoEncoder> ObjCVideoEncoderFactory::CreateVideoEncoder(
     const SdpVideoFormat &format) {
-<<<<<<< HEAD
-  RTCVideoCodecInfo *info = [[RTCVideoCodecInfo alloc] initWithNativeSdpVideoFormat:format];
-  id<RTCVideoEncoder> encoder = [encoder_factory_ createEncoder:info];
-  // Because of symbol conflict, isKindOfClass doesn't work as expected.
-  // See https://bugs.webkit.org/show_bug.cgi?id=198782.
-  // if ([encoder isKindOfClass:[RTCWrappedNativeVideoEncoder class]]) {
-  if ([info.name isEqual:@"VP8"] || [info.name isEqual:@"VP9"]) {
-=======
   RTC_OBJC_TYPE(RTCVideoCodecInfo) *info =
       [[RTC_OBJC_TYPE(RTCVideoCodecInfo) alloc] initWithNativeSdpVideoFormat:format];
   id<RTC_OBJC_TYPE(RTCVideoEncoder)> encoder = [encoder_factory_ createEncoder:info];
-  if ([encoder isKindOfClass:[RTCWrappedNativeVideoEncoder class]]) {
->>>>>>> master
-    return [(RTCWrappedNativeVideoEncoder *)encoder releaseWrappedEncoder];
+  if ([encoder isKindOfClass:[RTC_OBJC_TYPE(RTCWrappedNativeVideoEncoder) class]]) {
+    return [(RTC_OBJC_TYPE(RTCWrappedNativeVideoEncoder) *)encoder releaseWrappedEncoder];
   } else {
     return std::unique_ptr<ObjCVideoEncoder>(new ObjCVideoEncoder(encoder));
   }
